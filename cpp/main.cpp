@@ -177,37 +177,42 @@ std::vector<Polyhedron> read_ifc(std::string& fname) {
                     }
                 }
 
-                
-                // use DT to create convex hull
+
+       // ----use DT to create convex hull -> create polyhedron
                 Delaunay T;
                 T.insert(cur_vertices.begin(), cur_vertices.end());
-                Polyhedron chull;
-                CGAL::convex_hull_3_to_face_graph(T, chull);
-
-
-                for (auto &coordinates: unique_vertices) {
-                    polyhedron_builder.vertices.emplace_back(
-                            Point(
-                                    coordinates[0], // x
-                                    coordinates[1], // y
-                                    coordinates[2]) // z
-                    );
-                }
-                for (auto &face: face_v_indices) {
-                    polyhedron_builder.faces.emplace_back(face);
-                }
                 Polyhedron polyhedron;
-
-                polyhedron.delegate(polyhedron_builder);
+                CGAL::convex_hull_3_to_face_graph(T, polyhedron);
                 polyhedrons.emplace_back(polyhedron);
-
                 std::cout << "build polyhedron now" << '\n';
-
                 std::cout << "done" << '\n';
                 face_v_indices.clear();
                 cur_vertices.clear();
-                polyhedron_builder.vertices.clear();
-                polyhedron_builder.faces.clear();
+
+//       ----use polyhedron_builder to construct polyhedron
+//                for (auto &coordinates: unique_vertices) {
+//                    polyhedron_builder.vertices.emplace_back(
+//                            Point(
+//                                    coordinates[0], // x
+//                                    coordinates[1], // y
+//                                    coordinates[2]) // z
+//                    );
+//                }
+//                for (auto &face: face_v_indices) {
+//                    polyhedron_builder.faces.emplace_back(face);
+//                }
+//                Polyhedron polyhedron;
+//
+//                polyhedron.delegate(polyhedron_builder);
+//                polyhedrons.emplace_back(polyhedron);
+//
+//                std::cout << "build polyhedron now" << '\n';
+//
+//                std::cout << "done" << '\n';
+//                face_v_indices.clear();
+//                cur_vertices.clear();
+//                polyhedron_builder.vertices.clear();
+//                polyhedron_builder.faces.clear();
             }
         }
     }
@@ -257,19 +262,12 @@ std::vector<Polyhedron> read_ifc(std::string& fname) {
                 }
             }
         }
-        for (auto &coordinates: unique_vertices) {
-            polyhedron_builder.vertices.emplace_back(
-                    Point(
-                            coordinates[0], // x
-                            coordinates[1], // y
-                            coordinates[2]) // z
-            );
-        }
-        for (auto &face: face_v_indices) {
-            polyhedron_builder.faces.emplace_back(face);
-        }
+
+       // use DT to create convex hull -> create polyhedron
+        Delaunay T;
+        T.insert(cur_vertices.begin(), cur_vertices.end());
         Polyhedron polyhedron;
-        polyhedron.delegate(polyhedron_builder);
+        CGAL::convex_hull_3_to_face_graph(T, polyhedron);
         polyhedrons.emplace_back(polyhedron);
 
         std::cout << "build polyhedron now" << '\n';
@@ -277,8 +275,30 @@ std::vector<Polyhedron> read_ifc(std::string& fname) {
         std::cout << "done" << '\n';
         face_v_indices.clear();
         cur_vertices.clear();
-        polyhedron_builder.vertices.clear();
-        polyhedron_builder.faces.clear();
+
+//        use polyhedron_builder method
+//        for (auto &coordinates: unique_vertices) {
+//            polyhedron_builder.vertices.emplace_back(
+//                    Point(
+//                            coordinates[0], // x
+//                            coordinates[1], // y
+//                            coordinates[2]) // z
+//            );
+//        }
+//        for (auto &face: face_v_indices) {
+//            polyhedron_builder.faces.emplace_back(face);
+//        }
+//        Polyhedron polyhedron;
+//        polyhedron.delegate(polyhedron_builder);
+//        polyhedrons.emplace_back(polyhedron);
+
+//        std::cout << "build polyhedron now" << '\n';
+//
+//        std::cout << "done" << '\n';
+//        face_v_indices.clear();
+//        cur_vertices.clear();
+//        polyhedron_builder.vertices.clear();
+//        polyhedron_builder.faces.clear();
     }
     return polyhedrons;
 }
@@ -404,6 +424,25 @@ struct Shell_explorer {
     void visit(Nef_polyhedron::SFace_const_handle sf) {}
 
     void visit(Nef_polyhedron::Halffacet_const_handle hf) {
+        for (Nef_polyhedron::Halffacet_cycle_const_iterator it = hf->facet_cycles_begin(); it != hf->facet_cycles_end(); it++) {
+
+            //std::cout << it.is_shalfedge() << " " << it.is_shalfloop() << '\n';
+            Nef_polyhedron::SHalfedge_const_handle she = Nef_polyhedron::SHalfedge_const_handle(it);
+            CGAL_assertion(she != 0);
+            Nef_polyhedron::SHalfedge_around_facet_const_circulator hc_start = she;
+            Nef_polyhedron::SHalfedge_around_facet_const_circulator hc_end = hc_start;
+            //std::cout << "hc_start = hc_end? " << (hc_start == hc_end) << '\n';
+
+            CGAL_For_all(hc_start, hc_end) // each vertex of one halffacet
+            {
+                Nef_polyhedron::SVertex_const_handle svert = hc_start->source();
+                Point vpoint = svert->center_vertex()->point();
+                std::cout << "v: " << "(" << vpoint.x() << ", " << vpoint.y() << ", " << vpoint.z() << ")" << '\n';
+                vertices.push_back(vpoint); // add vertex to se's vertices
+            }
+            std::cout << '\n';
+
+        }
 
     }
 };
@@ -411,7 +450,7 @@ struct Shell_explorer {
 
 int main()
 {
-    std::string fname = "test2.obj";
+    std::string fname = "simple.obj";
     std::vector<Polyhedron> polyhedrons_list = read_ifc(fname);
     Nef_polyhedron big_nef;
     for(auto & polyhedron:polyhedrons_list)
@@ -419,18 +458,25 @@ int main()
         Nef_polyhedron temp_nef=Nef_polyhedron (polyhedron);
         big_nef+=temp_nef;
     }
+
+    if(big_nef.is_simple())
+        std::cout<<"big nef is simple"<<std::endl;
+    else std::cout<<"big nef is not simple"<<std::endl;
+
     output_OFF_file(big_nef,"output_off.OFF");
 
+    int volume_count = 0;
+    int shell_count = 0;
     Nef_polyhedron::Volume_const_iterator current_volume;
     CGAL_forall_volumes(current_volume, big_nef) {
+        std::cout << "volume: " << volume_count++ << " ";
+        std::cout << "volume mark: " << current_volume->mark() << '\n';
         Nef_polyhedron::Shell_entry_const_iterator current_shell;
-        CGAL_forall_shells_of(current_shell, current_volume) {
+        CGAL_forall_shells_of(current_shell, current_volume) { // iterate each shell
             Shell_explorer se;
             Nef_polyhedron::SFace_const_handle sface_in_shell(current_shell);
             big_nef.visit_shell_objects(sface_in_shell, se);
-
         }
     }
-
     return 0;
 }
