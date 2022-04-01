@@ -377,16 +377,47 @@ void output_OFF_file(const Nef_polyhedron& nef_p,const std::string& f) {
     out.close();
 }
 
+/*
+ * this is shell explorer
+ */
+struct Shell_explorer {
+    std::vector<Point> vertices;
+    std::vector<std::vector<unsigned long>> faces;
+
+    void visit(Nef_polyhedron::Vertex_const_handle v) {}
+    void visit(Nef_polyhedron::Halfedge_const_handle he) {}
+    void visit(Nef_polyhedron::SHalfedge_const_handle she) {}
+    void visit(Nef_polyhedron::SHalfloop_const_handle shl) {}
+    void visit(Nef_polyhedron::SFace_const_handle sf) {}
+
+    void visit(Nef_polyhedron::Halffacet_const_handle hf) {
+
+    }
+};
+
+
 int main()
 {
     std::string fname = "test2.obj";
     std::vector<Polyhedron> polyhedrons_list = read_ifc(fname);
-    Nef_polyhedron bignef;
+    Nef_polyhedron big_nef;
     for(auto & polyhedron:polyhedrons_list)
     {
         Nef_polyhedron temp_nef=Nef_polyhedron (polyhedron);
-        bignef+=temp_nef;
+        big_nef+=temp_nef;
     }
-    output_OFF_file(bignef,"output_off.OFF");
+    output_OFF_file(big_nef,"output_off.OFF");
+
+    Nef_polyhedron::Volume_const_iterator current_volume;
+    CGAL_forall_volumes(current_volume, big_nef) {
+        Nef_polyhedron::Shell_entry_const_iterator current_shell;
+        CGAL_forall_shells_of(current_shell, current_volume) {
+            Shell_explorer se;
+            Nef_polyhedron::SFace_const_handle sface_in_shell(current_shell);
+            big_nef.visit_shell_objects(sface_in_shell, se);
+
+        }
+    }
+
     return 0;
 }
