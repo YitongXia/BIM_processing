@@ -5,16 +5,19 @@
 #include <iostream>
 #include <fstream>
 #include <CGAL/IO/Nef_polyhedron_iostream_3.h>
+#include <CGAL/convex_hull_3_to_face_graph.h>
+#include <CGAL/Delaunay_triangulation_3.h>
 
 #include <CGAL/Surface_mesh.h>
 #include <CGAL/boost/graph/convert_nef_polyhedron_to_polygon_mesh.h>
-#include <CGAL/Polygon_mesh_slicer.h>
+#include <CGAL/convex_hull_3.h>
 
 typedef CGAL::Exact_predicates_exact_constructions_kernel Kernel;
 typedef Kernel::Point_3 Point;
 typedef CGAL::Polyhedron_3<Kernel> Polyhedron;
 typedef CGAL::Nef_polyhedron_3<Kernel> Nef_polyhedron;
 typedef CGAL::Surface_mesh<Kernel::Point_3> Surface_mesh;
+typedef CGAL::Delaunay_triangulation_3<Kernel>Delaunay;
 
 template <class HDS>
 struct Polyhedron_builder : public CGAL::Modifier_base<HDS> {
@@ -173,6 +176,15 @@ std::vector<Polyhedron> read_ifc(std::string& fname) {
                         }
                     }
                 }
+
+                
+                // use DT to create convex hull
+                Delaunay T;
+                T.insert(cur_vertices.begin(), cur_vertices.end());
+                Polyhedron chull;
+                CGAL::convex_hull_3_to_face_graph(T, chull);
+
+
                 for (auto &coordinates: unique_vertices) {
                     polyhedron_builder.vertices.emplace_back(
                             Point(
@@ -185,6 +197,7 @@ std::vector<Polyhedron> read_ifc(std::string& fname) {
                     polyhedron_builder.faces.emplace_back(face);
                 }
                 Polyhedron polyhedron;
+
                 polyhedron.delegate(polyhedron_builder);
                 polyhedrons.emplace_back(polyhedron);
 
