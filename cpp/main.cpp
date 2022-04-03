@@ -449,6 +449,18 @@ struct Shell_explorer {
     }
 };
 
+class MyPoint {
+    double x;
+    double y;
+    double z;
+    MyPoint(double x1, double y1,double z1)
+    {
+        x=x1;
+        y=y1;
+        z=z1;
+    }
+};
+
 void write_cityjson(const Nef_polyhedron& big_nef) {
 
     nlohmann::json j;
@@ -466,29 +478,40 @@ void write_cityjson(const Nef_polyhedron& big_nef) {
     j["CityObjects"]["Building_1"]["geometry"] = json::array();
     j["CityObjects"]["Building_1"]["type"]="Building";
 
-
-
-    int volume_count = 1;
+    std::vector<Point> all_vertices;
+    int volume_count = 0;
     int shell_count = 0;
     Nef_polyhedron::Volume_const_iterator current_volume;
     CGAL_forall_volumes(current_volume, big_nef) {
 
         std::cout << "volume: " << volume_count++ << " ";
         std::cout << "volume mark: " << current_volume->mark() << '\n';
-        std::string building_name="Building_1_"+ std::to_string(volume_count);
+        std::string building_name="Building-1-"+ std::to_string(volume_count);
         j["CityObjects"][building_name]=json::object();
-        j["CityObjects"]["Building_1"]["attributes"]=json::object();
-        j["CityObjects"]["Building_1"]["geometry"] = json::array();
+        j["CityObjects"][building_name]["attributes"]=json::object();
+        j["CityObjects"][building_name]["geometry"] = json::array();
+
 
         Nef_polyhedron::Shell_entry_const_iterator current_shell;
+        bool shell_mark= false;
+
         CGAL_forall_shells_of(current_shell, current_volume) { // iterate each shell
+
             Shell_explorer se;
             Nef_polyhedron::SFace_const_handle sface_in_shell(current_shell);
             big_nef.visit_shell_objects(sface_in_shell, se);
             std::vector<Point> unique_vertices;
+
+            if(all_vertices.empty()) all_vertices = se.vertices;
+            else{
+                for(auto& vertex: se.vertices)
+                    all_vertices.emplace_back(vertex);
+            }
+
             std::vector<Point>cur_vertices=se.vertices;
-            std::vector<std::vector<unsigned long>> face_v_indices;
-            for(unsigned long i=0;i<se.vertices.size();++i)
+            std::vector<std::vector<unsigned long>> face_v_indices=se.faces;
+
+            for(unsigned long i=0;i<all_vertices.size();++i)
             {
                 if (unique_vertices.empty()) unique_vertices.emplace_back();
                 else
@@ -498,14 +521,14 @@ void write_cityjson(const Nef_polyhedron& big_nef) {
                     {
                         if(i != k)
                         {
-                            if(cur_vertices[i].x() == unique_vertices[k].x()&&cur_vertices[i].y() == unique_vertices[k].y() && cur_vertices[i].z() == unique_vertices[k].z() )
+                            if(all_vertices[i].x() == unique_vertices[k].x()&&all_vertices[i].y() == unique_vertices[k].y() && all_vertices[i].z() == unique_vertices[k].z() )
                             {
                                 mark= true;
                             }
                         }
                     }
                     if(!mark) {
-                        unique_vertices.emplace_back(cur_vertices[i]);
+                        unique_vertices.emplace_back(all_vertices[i]);
                     }
                 }
             }
@@ -515,7 +538,7 @@ void write_cityjson(const Nef_polyhedron& big_nef) {
                 {
 
                     for(unsigned long i = 0; i < unique_vertices.size(); ++i){
-                        if(unique_vertices[i].x()==cur_vertices[vertex-1].x() && unique_vertices[i].y()==cur_vertices[vertex-1].y() && unique_vertices[i].z()==cur_vertices[vertex-1].z())
+                        if(unique_vertices[i].x()==all_vertices[vertex-1].x() && unique_vertices[i].y()==all_vertices[vertex-1].y() && unique_vertices[i].z()==all_vertices[vertex-1].z())
                         {
                             vertex=i;
                             break;
@@ -523,7 +546,48 @@ void write_cityjson(const Nef_polyhedron& big_nef) {
                     }
                 }
             }
+            if(!shell_mark)
+            {
+                auto all_f=json::array();
+                for(auto & face:face_v_indices)
+                {
+                    auto single_f=json::array();
+                    for(auto & vertex: face){
+                        single_f.emplace_back(vertex);
+                    }
+                    auto shell_f=json::array();
+                    shell_f.emplace_back(single_f);
+                    all_f.emplace_back(shell_f);
+                }
+                auto geometry_contect=json::object();
+                geometry_contect["boundaries"]=json::array();
+                geometry_contect["boundaries"].emplace_back(all_f);
+                geometry_contect["lod"]="1.1";
+                geometry_contect["semantics"]=json::object();
+                geometry_contect["semantics"]["surfaces"]=json::array();
+                geometry_contect["semantics"]["values"]=json::array();
+                geometry_contect["type"]="Solid";
+
+                j["CityObjects"][building_name]["geometry"].emplace_back(geometry_contect);
+
+                // ----- currently there is no information about the surface
+
+                j["CityObjects"][building_name]["parents"]=json::array({"Building-1"});
+                j["CityObjects"][building_name]["type"]="BuildingRoom";
+
+                j["vertices"]=json::array();
+
+                for(const auto& vpoint:all_vertices)
+                {
+                    auto single_list=json::array({CGAL::to_double(vpoint.x()),CGAL::to_double(vpoint.y()),CGAL::to_double(vpoint.z())});
+                    j["vertices"].emplace_back(single_list);
+                }
+
+
+                shell_mark= true;
+            }
         }
+
     }
 
 
@@ -550,19 +614,8 @@ int main()
         std::cout<<"big nef is simple"<<std::endl;
     else std::cout<<"big nef is not simple"<<std::endl;
 
-
-    int volume_count = 1;
-    int shell_count = 0;
-    Nef_polyhedron::Volume_const_iterator current_volume;
-    CGAL_forall_volumes(current_volume, big_nef) {
-
-        Nef_polyhedron::Shell_entry_const_iterator current_shell;
-        CGAL_forall_shells_of(current_shell, current_volume) { // iterate each shell
-            Shell_explorer se;
-            Nef_polyhedron::SFace_const_handle sface_in_shell(current_shell);
-            big_nef.visit_shell_objects(sface_in_shell, se);
-        }
-    }
-
+    write_cityjson(big_nef);
+    
+    
     return 0;
 }
